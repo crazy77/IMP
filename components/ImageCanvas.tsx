@@ -17,18 +17,22 @@ interface ImageCanvasProps {
   imageUrl: string | null;
   annotations: Annotation[];
   onImageUpload: (file: File) => void;
+  onImageDelete?: () => void;
   onAnnotationsChange: (annotations: Annotation[]) => void;
   onAnnotationClick?: (number: number) => void;
   highlightedAnnotation?: number | null;
+  isUploading?: boolean;
 }
 
 export default function ImageCanvas({
   imageUrl,
   annotations,
   onImageUpload,
+  onImageDelete,
   onAnnotationsChange,
   onAnnotationClick,
   highlightedAnnotation,
+  isUploading = false,
 }: ImageCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -188,22 +192,45 @@ export default function ImageCanvas({
 
   return (
     <div className="h-full flex flex-col bg-gray-100 dark:bg-gray-900">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <label className="px-4 py-2 bg-blue-600 text-white rounded cursor-pointer hover:bg-blue-700 inline-block">
-          이미지 업로드
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2">
+        <label className={`px-4 py-2 bg-blue-600 text-white rounded inline-block ${
+          isUploading ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-blue-700"
+        }`}>
+          {isUploading ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              업로드 중...
+            </span>
+          ) : (
+            imageUrl ? "이미지 변경" : "이미지 업로드"
+          )}
           <input
             type="file"
             accept="image/*"
             onChange={handleFileChange}
+            disabled={isUploading}
             className="hidden"
           />
         </label>
-        <button
-          onClick={() => onAnnotationsChange([])}
-          className="ml-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          모든 Annotation 삭제
-        </button>
+        {imageUrl && onImageDelete && !isUploading && (
+          <button
+            onClick={onImageDelete}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            이미지 삭제
+          </button>
+        )}
+        {imageUrl && !isUploading && (
+          <button
+            onClick={() => onAnnotationsChange([])}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            모든 Annotation 삭제
+          </button>
+        )}
       </div>
 
       <div className="flex flex-1 items-center justify-center">

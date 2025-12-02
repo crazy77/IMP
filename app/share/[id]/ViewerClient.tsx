@@ -8,6 +8,10 @@ import { Manual, Section } from "@prisma/client";
 import SplitPane from "@/components/SplitPane";
 import ThemeToggle from "@/components/ThemeToggle";
 
+// localStorage 키
+const STORAGE_KEY_SPLIT_RATIO = "imm-viewer-split-ratio";
+const STORAGE_KEY_SIDEBAR_COLLAPSED = "imm-viewer-sidebar-collapsed";
+
 // 하이라이트를 동적으로 적용하는 컴포넌트
 function HighlightedContent({ 
   html, 
@@ -78,6 +82,28 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
   const [splitRatio, setSplitRatio] = useState(70);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [highlightedAnnotation, setHighlightedAnnotation] = useState<number | null>(null);
+
+  // localStorage에서 초기값 로드 (클라이언트에서만)
+  useEffect(() => {
+    const savedSplitRatio = localStorage.getItem(STORAGE_KEY_SPLIT_RATIO);
+    if (savedSplitRatio) {
+      setSplitRatio(parseInt(savedSplitRatio, 10));
+    }
+    const savedSidebarCollapsed = localStorage.getItem(STORAGE_KEY_SIDEBAR_COLLAPSED);
+    if (savedSidebarCollapsed === "true") {
+      setIsSidebarCollapsed(true);
+    }
+  }, []);
+
+  // splitRatio 변경 시 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_SPLIT_RATIO, splitRatio.toString());
+  }, [splitRatio]);
+
+  // isSidebarCollapsed 변경 시 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_SIDEBAR_COLLAPSED, isSidebarCollapsed.toString());
+  }, [isSidebarCollapsed]);
 
   const activeSection = sections[activeSectionIndex] || null;
 

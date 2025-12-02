@@ -6,6 +6,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Manual, Section, Prisma } from "@prisma/client";
+import toast from "react-hot-toast";
 import ImageCanvas from "@/components/ImageCanvas";
 import MarkdownEditor from "@/components/MarkdownEditor";
 import TableOfContents from "@/components/TableOfContents";
@@ -16,6 +17,10 @@ import {
   updateAnnotationInMarkdown,
   removeAnnotationFromMarkdown,
 } from "@/lib/markdownUtils";
+
+// localStorage 키
+const STORAGE_KEY_SPLIT_RATIO = "imm-editor-split-ratio";
+const STORAGE_KEY_SIDEBAR_COLLAPSED = "imm-editor-sidebar-collapsed";
 
 interface Annotation {
   id: string;
@@ -43,9 +48,32 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
   const [sections, setSections] = useState<SectionWithAnnotations[]>(initialSections);
   const [activeSectionIndex, setActiveSectionIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [splitRatio, setSplitRatio] = useState(70);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const markdownEditorRef = useRef<any>(null);
+
+  // localStorage에서 초기값 로드 (클라이언트에서만)
+  useEffect(() => {
+    const savedSplitRatio = localStorage.getItem(STORAGE_KEY_SPLIT_RATIO);
+    if (savedSplitRatio) {
+      setSplitRatio(parseInt(savedSplitRatio, 10));
+    }
+    const savedSidebarCollapsed = localStorage.getItem(STORAGE_KEY_SIDEBAR_COLLAPSED);
+    if (savedSidebarCollapsed === "true") {
+      setIsSidebarCollapsed(true);
+    }
+  }, []);
+
+  // splitRatio 변경 시 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_SPLIT_RATIO, splitRatio.toString());
+  }, [splitRatio]);
+
+  // isSidebarCollapsed 변경 시 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_SIDEBAR_COLLAPSED, isSidebarCollapsed.toString());
+  }, [isSidebarCollapsed]);
 
   const activeSection = sections[activeSectionIndex] || null;
 
@@ -177,7 +205,7 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
 
   const handleDeleteSection = (index: number) => {
     if (sections.length <= 1) {
-      alert("최소 하나의 섹션이 필요합니다.");
+      toast.error("최소 하나의 섹션이 필요합니다.");
       return;
     }
     const updated = sections.filter((_, i) => i !== index);
@@ -188,6 +216,9 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
   };
 
   const handleImageUpload = async (file: File, sectionIndex: number) => {
+    setIsUploadingImage(true);
+    const toastId = toast.loading("이미지 업로드 중...");
+    
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -203,14 +234,28 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
 
       const data = await response.json();
       handleUpdateSection(sectionIndex, { imageUrl: data.url });
+      toast.success("이미지가 업로드되었습니다.", { id: toastId });
     } catch (error) {
       console.error("이미지 업로드 실패:", error);
-      alert("이미지 업로드에 실패했습니다.");
+      toast.error("이미지 업로드에 실패했습니다.", { id: toastId });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleImageDelete = (sectionIndex: number) => {
+    if (confirm("이미지를 삭제하시겠습니까? 어노테이션도 함께 삭제됩니다.")) {
+      handleUpdateSection(sectionIndex, { 
+        imageUrl: null,
+        annotations: null 
+      });
     }
   };
 
   const handleSave = async () => {
     setIsSaving(true);
+    const toastId = toast.loading("저장 중...");
+    
     try {
       const url = manual
         ? `/api/manuals/${manual.id}/update`
@@ -245,10 +290,10 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
         router.refresh();
       }
       
-      alert("저장되었습니다!");
+      toast.success("저장되었습니다!", { id: toastId });
     } catch (error) {
       console.error("저장 실패:", error);
-      alert("저장에 실패했습니다.");
+      toast.error("저장에 실패했습니다.", { id: toastId });
     } finally {
       setIsSaving(false);
     }
@@ -256,12 +301,12 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
 
   const handleCopyShareLink = async () => {
     if (!manual || !isPublished) {
-      alert("먼저 매뉴얼을 게시해야 합니다.");
+      toast.error("먼저 매뉴얼을 게시해야 합니다.");
       return;
     }
     const link = `${window.location.origin}/share/${manual.id}`;
     await navigator.clipboard.writeText(link);
-    alert("공유 링크가 복사되었습니다!");
+    toast.success("공유 링크가 복사되었습니다!");
   };
 
   const handlePrevious = () => {
@@ -368,7 +413,9 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
                 imageUrl={activeSection.imageUrl}
                 annotations={activeSection.annotations || []}
                 onImageUpload={(file) => handleImageUpload(file, activeSectionIndex)}
+                onImageDelete={() => handleImageDelete(activeSectionIndex)}
                 onAnnotationsChange={handleAnnotationsChange}
+                isUploading={isUploadingImage}
               />
             ) : (
               <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
