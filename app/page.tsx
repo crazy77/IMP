@@ -2,6 +2,12 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import SignInButton from "./SignInButton";
 import ThemeToggle from "@/components/ThemeToggle";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Interactive Manual Maker",
+  description: "이미지와 텍스트가 유기적으로 연결된 고품질 매뉴얼 작성 플랫폼",
+};
 
 export default async function Home() {
   const session = await auth();

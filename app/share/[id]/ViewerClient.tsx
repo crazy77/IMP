@@ -281,6 +281,15 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
 
   const activeSection = sections[activeSectionIndex] || null;
 
+  // 활성 섹션 변경 시 document.title 업데이트
+  useEffect(() => {
+    if (manual && activeSection) {
+      document.title = `${activeSection.title} - ${manual.title}`;
+    } else if (manual) {
+      document.title = `${manual.title} - Interactive Manual Maker`;
+    }
+  }, [activeSection, manual]);
+
   // 어노테이션 클릭 시 하이라이트
   const handleAnnotationClick = (number: number) => {
     setHighlightedAnnotation(number);

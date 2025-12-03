@@ -2,6 +2,41 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import ViewerClient from "./ViewerClient";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  
+  const manual = await prisma.manual.findUnique({
+    where: { id },
+    include: {
+      sections: {
+        orderBy: {
+          orderIndex: "asc",
+        },
+        take: 1,
+      },
+    },
+  });
+
+  if (!manual || !manual.isPublished) {
+    return {
+      title: "매뉴얼 보기 - Interactive Manual Maker",
+    };
+  }
+
+  const firstSection = manual.sections[0];
+  const sectionTitle = firstSection?.title || "새 섹션";
+  
+  return {
+    title: `${sectionTitle} - ${manual.title}`,
+    description: `${manual.title} 매뉴얼을 확인합니다`,
+  };
+}
 
 type SectionWithAnnotations = {
   id: string;

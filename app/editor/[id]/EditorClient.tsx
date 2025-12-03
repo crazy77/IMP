@@ -129,6 +129,15 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
 
   const activeSection = sections[activeSectionIndex] || null;
 
+  // 활성 섹션 변경 시 document.title 업데이트
+  useEffect(() => {
+    if (manual && activeSection) {
+      document.title = `${activeSection.title} - ${manual.title}`;
+    } else if (manual) {
+      document.title = `${manual.title} 편집 - Interactive Manual Maker`;
+    }
+  }, [activeSection, manual]);
+
   const handleAddSection = async (parentId: string | null = null) => {
     // 매뉴얼이 없으면 먼저 매뉴얼을 생성
     let manualId = manual?.id;

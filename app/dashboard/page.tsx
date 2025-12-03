@@ -3,6 +3,12 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import DashboardClient from "./DashboardClient";
 import dayjs from "dayjs";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "대시보드 - Interactive Manual Maker",
+  description: "매뉴얼 관리 대시보드",
+};
 
 export default async function DashboardPage() {
   const session = await auth();
