@@ -16,11 +16,15 @@ const STORAGE_KEY_SIDEBAR_COLLAPSED = "imm-viewer-sidebar-collapsed";
 function HighlightedContent({ 
   html, 
   highlightedAnnotation,
-  onAnnotationClick 
+  onAnnotationClick,
+  onSectionLinkClick,
+  manualId,
 }: { 
   html: string; 
   highlightedAnnotation?: number | null;
   onAnnotationClick?: (number: number) => void;
+  onSectionLinkClick?: (sectionId: string) => void;
+  manualId?: string;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -38,7 +42,62 @@ function HighlightedContent({
         el.classList.remove('highlighted');
       }
     });
-  }, [highlightedAnnotation, html]);
+
+    // 섹션 링크의 href를 전체 URL로 변환
+    if (manualId) {
+      const sectionLinks = contentRef.current.querySelectorAll('a[href^="#"]');
+      sectionLinks.forEach((link) => {
+        const href = link.getAttribute('href');
+        if (href && href.startsWith('#') && !href.startsWith('#/')) {
+          // 상대 경로 해시를 전체 URL로 변환
+          const sectionId = href.slice(1);
+          const fullUrl = `${window.location.origin}/share/${manualId}#${sectionId}`;
+          link.setAttribute('href', fullUrl);
+          // 클릭 시에도 섹션으로 이동하도록 처리
+          link.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (onSectionLinkClick) {
+              onSectionLinkClick(sectionId);
+            }
+          });
+        }
+      });
+    }
+  }, [highlightedAnnotation, html, manualId, onSectionLinkClick]);
+
+  // 섹션 링크 클릭 처리를 위한 별도 useEffect
+  useEffect(() => {
+    if (!contentRef.current || !onSectionLinkClick) return;
+
+    const handleLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('a[href*="#"]') as HTMLAnchorElement;
+      
+      if (link) {
+        const href = link.getAttribute('href');
+        // 전체 URL 형식 또는 해시만 있는 경우 모두 처리
+        if (href && (href.includes('#') || href.startsWith('#'))) {
+          const hashMatch = href.match(/#([^/]+)$/);
+          if (hashMatch) {
+            e.preventDefault();
+            e.stopPropagation();
+            const sectionId = hashMatch[1];
+            console.log('섹션 링크 클릭:', sectionId, 'href:', href); // 디버깅용
+            onSectionLinkClick(sectionId);
+          }
+        }
+      }
+    };
+
+    // 이벤트 위임: 부모 요소에 리스너 추가
+    contentRef.current.addEventListener('click', handleLinkClick, true);
+
+    return () => {
+      if (contentRef.current) {
+        contentRef.current.removeEventListener('click', handleLinkClick, true);
+      }
+    };
+  }, [html, onSectionLinkClick]);
 
   return (
     <div
@@ -46,11 +105,28 @@ function HighlightedContent({
       dangerouslySetInnerHTML={{ __html: html }}
       onClick={(e) => {
         const target = e.target as HTMLElement;
+        
+        // 어노테이션 클릭 처리
         const annotationSpan = target.closest('span[data-type="annotation"]');
         if (annotationSpan) {
           const number = parseInt(annotationSpan.getAttribute('data-number') || '0', 10);
           if (number && onAnnotationClick) {
             onAnnotationClick(number);
+          }
+          return;
+        }
+        
+        // 섹션 링크 클릭 처리 (fallback)
+        const link = target.closest('a[href^="#"]') as HTMLAnchorElement;
+        if (link && onSectionLinkClick) {
+          const href = link.getAttribute('href');
+          if (href && href.startsWith('#')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const sectionId = href.slice(1);
+            console.log('섹션 링크 클릭 (onClick fallback):', sectionId); // 디버깅용
+            onSectionLinkClick(sectionId);
+            return;
           }
         }
       }}
@@ -82,6 +158,54 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
   const [splitRatio, setSplitRatio] = useState(70);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [highlightedAnnotation, setHighlightedAnnotation] = useState<number | null>(null);
+  const [copiedSectionId, setCopiedSectionId] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const isUpdatingFromHashRef = useRef(false);
+
+  // 섹션의 자식 섹션들 찾기
+  const getChildren = (sectionId: string): SectionWithAnnotations[] => {
+    return sections.filter(s => s.parentId === sectionId);
+  };
+
+  // 계층 구조로 섹션 정렬 (orderIndex로 정렬)
+  const sortedSections = [...sections].sort((a, b) => {
+    return a.orderIndex - b.orderIndex;
+  });
+
+  // 섹션의 깊이 계산 (0 = 최상위, 1 = 하위)
+  const getSectionDepth = (section: SectionWithAnnotations): number => {
+    if (!section.parentId) return 0;
+    const parent = sections.find(s => s.id === section.parentId);
+    return parent ? getSectionDepth(parent) + 1 : 0;
+  };
+
+  // 섹션을 표시할지 여부 결정 (부모가 접혀있으면 숨김)
+  const shouldShowSection = (section: SectionWithAnnotations): boolean => {
+    if (!section.parentId) return true;
+    const parent = sections.find(s => s.id === section.parentId);
+    if (!parent) return true;
+    return expandedSections.has(section.parentId);
+  };
+
+  // 초기 로드 시 모든 부모 섹션을 확장 상태로 설정
+  useEffect(() => {
+    const newExpandedSections = new Set(
+      sections.filter(s => getChildren(s.id).length > 0).map(s => s.id)
+    );
+    setExpandedSections(newExpandedSections);
+  }, [sections]);
+
+  const toggleExpand = (sectionId: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  };
 
   // localStorage에서 초기값 로드 (클라이언트에서만)
   useEffect(() => {
@@ -105,6 +229,56 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
     localStorage.setItem(STORAGE_KEY_SIDEBAR_COLLAPSED, isSidebarCollapsed.toString());
   }, [isSidebarCollapsed]);
 
+  // URL 해시에서 섹션 ID 읽기 및 해당 섹션으로 이동
+  useEffect(() => {
+    const handleHashChange = () => {
+      // 프로그래밍 방식 업데이트 중이면 무시
+      if (isUpdatingFromHashRef.current) {
+        return;
+      }
+
+      const hash = window.location.hash.slice(1); // # 제거
+      if (hash) {
+        const sectionIndex = sections.findIndex((s) => s.id === hash);
+        if (sectionIndex !== -1) {
+          setActiveSectionIndex((prevIndex) => {
+            if (prevIndex !== sectionIndex) {
+              // 스크롤을 맨 위로 이동
+              window.scrollTo(0, 0);
+              return sectionIndex;
+            }
+            return prevIndex;
+          });
+        }
+      }
+    };
+
+    // 초기 로드 시 해시 확인
+    handleHashChange();
+
+    // 해시 변경 감지
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [sections]);
+
+  // activeSectionIndex 변경 시 URL 해시 업데이트
+  useEffect(() => {
+    const currentSection = sections[activeSectionIndex];
+    if (currentSection) {
+      const newHash = `#${currentSection.id}`;
+      if (window.location.hash !== newHash) {
+        // 프로그래밍 방식 업데이트 플래그 설정
+        isUpdatingFromHashRef.current = true;
+        // history.pushState를 사용하여 페이지 리로드 없이 URL 업데이트
+        window.history.pushState(null, "", newHash);
+        // 다음 이벤트 루프에서 플래그 해제
+        setTimeout(() => {
+          isUpdatingFromHashRef.current = false;
+        }, 0);
+      }
+    }
+  }, [activeSectionIndex, sections]);
+
   const activeSection = sections[activeSectionIndex] || null;
 
   // 어노테이션 클릭 시 하이라이트
@@ -119,6 +293,16 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
     setTimeout(() => setHighlightedAnnotation(null), 2000);
   };
 
+  const handleSectionLinkClick = (sectionId: string) => {
+    const sectionIndex = sections.findIndex((s) => s.id === sectionId);
+    if (sectionIndex !== -1 && sectionIndex !== activeSectionIndex) {
+      setActiveSectionIndex(sectionIndex);
+      // URL 해시 업데이트는 useEffect에서 자동으로 처리됨
+      // 스크롤을 맨 위로 이동
+      window.scrollTo(0, 0);
+    }
+  };
+
   const handlePrevious = () => {
     if (activeSectionIndex > 0) {
       setActiveSectionIndex(activeSectionIndex - 1);
@@ -129,6 +313,13 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
     if (activeSectionIndex < sections.length - 1) {
       setActiveSectionIndex(activeSectionIndex + 1);
     }
+  };
+
+  const handleCopySectionLink = async (sectionId: string) => {
+    const link = `${window.location.origin}/share/${manual.id}#${sectionId}`;
+    await navigator.clipboard.writeText(link);
+    setCopiedSectionId(sectionId);
+    setTimeout(() => setCopiedSectionId(null), 2000);
   };
 
   return (
@@ -150,20 +341,80 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
                 </button>
               </div>
               <ul className="space-y-1">
-                {sections.map((section, index) => (
-                  <li key={section.id}>
-                    <button
-                      onClick={() => setActiveSectionIndex(index)}
-                      className={`w-full text-left p-2 rounded ${
-                        activeSectionIndex === index
-                          ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-                          : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-                      }`}
-                    >
-                      {section.title || `섹션 ${index + 1}`}
-                    </button>
-                  </li>
-                ))}
+                {sortedSections.map((section) => {
+                  if (!shouldShowSection(section)) return null;
+                  
+                  const originalIndex = sections.findIndex(s => s.id === section.id);
+                  const depth = getSectionDepth(section);
+                  const children = getChildren(section.id);
+                  const hasChildren = children.length > 0;
+                  const isExpanded = expandedSections.has(section.id);
+
+                  return (
+                    <li key={section.id}>
+                      <div className="flex items-center gap-1 group">
+                        {/* 들여쓰기 */}
+                        <div style={{ width: `${depth * 20}px` }} className="flex-shrink-0">
+                          {depth > 0 && (
+                            <div className="w-full h-full border-l-2 border-gray-300 dark:border-gray-600 ml-2" />
+                          )}
+                        </div>
+                        {/* 확장/축소 버튼 */}
+                        {hasChildren && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpand(section.id);
+                            }}
+                            className="p-0.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+                          >
+                            <svg 
+                              className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        )}
+                        {!hasChildren && <div className="w-4" />}
+                        <button
+                          onClick={() => setActiveSectionIndex(originalIndex)}
+                          className={`flex-1 text-left p-2 rounded ${
+                            activeSectionIndex === originalIndex
+                              ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                              : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                          }`}
+                        >
+                          {section.title || `섹션 ${originalIndex + 1}`}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopySectionLink(section.id);
+                          }}
+                          className={`p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                            copiedSectionId === section.id
+                              ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 opacity-100"
+                              : "hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+                          }`}
+                          title="섹션 링크 복사"
+                        >
+                          {copiedSectionId === section.id ? (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           </aside>
@@ -237,6 +488,8 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
                     html={activeSection.contentMd}
                     highlightedAnnotation={highlightedAnnotation}
                     onAnnotationClick={handleTextAnnotationClick}
+                    onSectionLinkClick={handleSectionLinkClick}
+                    manualId={manual.id}
                   />
                 </div>
               </div>
@@ -251,6 +504,8 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
                   html={activeSection.contentMd}
                   highlightedAnnotation={highlightedAnnotation}
                   onAnnotationClick={handleTextAnnotationClick}
+                  onSectionLinkClick={handleSectionLinkClick}
+                  manualId={manual.id}
                 />
               </div>
             ) : (
