@@ -10,6 +10,7 @@
         "@prisma/adapter-pg": "^7.0.1",
         "@prisma/client": "^7.0.0",
         "@tiptap/core": "^3.11.1",
+        "@tiptap/extension-link": "^3.12.0",
         "@tiptap/extension-placeholder": "^3.11.1",
         "@tiptap/markdown": "^3.11.1",
         "@tiptap/react": "^3.11.1",
@@ -264,7 +265,7 @@
 
     "@tiptap/extension-italic": ["@tiptap/extension-italic@3.11.1", "", { "peerDependencies": { "@tiptap/core": "^3.11.1" } }, "sha512-SrjsU+gvhjoPKelc4YSeC2AQ0lhwLiDWMO7fW83CVitCF8iWXpBSeVCI5SxtPeZNKTZ1ZCc3lIQCeEHOC/gP0g=="],
 
-    "@tiptap/extension-link": ["@tiptap/extension-link@3.11.1", "", { "dependencies": { "linkifyjs": "^4.3.2" }, "peerDependencies": { "@tiptap/core": "^3.11.1", "@tiptap/pm": "^3.11.1" } }, "sha512-ds5auQnWGcHwC2/c1iEvvybdLPcSDlxsii7FPaZg4LaSGdNojRB0qDRZw5dzYQZbfIf5vgYGcIVCVjNPZs1UwQ=="],
+    "@tiptap/extension-link": ["@tiptap/extension-link@3.12.0", "", { "dependencies": { "linkifyjs": "^4.3.2" }, "peerDependencies": { "@tiptap/core": "^3.12.0", "@tiptap/pm": "^3.12.0" } }, "sha512-C363e6JgIX/McpYWAgJxbUHZecPYs6mcZzrg6lqjgjUDPAiHXEY3WR/lHCC3XuZ4ZAvffRsKXcjX6ewdIkf4Uw=="],
 
     "@tiptap/extension-list": ["@tiptap/extension-list@3.11.1", "", { "peerDependencies": { "@tiptap/core": "^3.11.1", "@tiptap/pm": "^3.11.1" } }, "sha512-XJRN9pOPMi3SsaKv4qM8WBEi3YDrjXYtYlAlZutQe1JpdKykSjLwwYq7k3V8UHqR3YKxyOV8HTYOYoOaZ9TMTQ=="],
 
@@ -1453,6 +1454,8 @@
     "@prisma/fetch-engine/@prisma/get-platform": ["@prisma/get-platform@7.0.1", "", { "dependencies": { "@prisma/debug": "7.0.1" } }, "sha512-DrsGnZOsF7PlAE7UtqmJenWti87RQtg7v9qW9alS71Pj0P6ZQV0RuzRQaql9dCWoo6qKAaF5U/L4kI826MmiZg=="],
 
     "@prisma/get-platform/@prisma/debug": ["@prisma/debug@6.8.2", "", {}, "sha512-4muBSSUwJJ9BYth5N8tqts8JtiLT8QI/RSAzEogwEfpbYGFo9mYsInsVo8dqXdPO2+Rm5OG5q0qWDDE3nyUbVg=="],
+
+    "@tiptap/starter-kit/@tiptap/extension-link": ["@tiptap/extension-link@3.11.1", "", { "dependencies": { "linkifyjs": "^4.3.2" }, "peerDependencies": { "@tiptap/core": "^3.11.1", "@tiptap/pm": "^3.11.1" } }, "sha512-ds5auQnWGcHwC2/c1iEvvybdLPcSDlxsii7FPaZg4LaSGdNojRB0qDRZw5dzYQZbfIf5vgYGcIVCVjNPZs1UwQ=="],
 
     "@typescript-eslint/eslint-plugin/ignore": ["ignore@7.0.5", "", {}, "sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg=="],
 

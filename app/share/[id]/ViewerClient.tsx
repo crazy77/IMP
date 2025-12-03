@@ -43,7 +43,7 @@ function HighlightedContent({
       }
     });
 
-    // 섹션 링크의 href를 전체 URL로 변환
+    // 섹션 링크의 href를 전체 URL로 변환 및 외부 링크에 target="new_window" 추가
     if (manualId) {
       const sectionLinks = contentRef.current.querySelectorAll('a[href^="#"]');
       sectionLinks.forEach((link) => {
@@ -63,6 +63,24 @@ function HighlightedContent({
         }
       });
     }
+
+    // 외부 링크(섹션 링크가 아닌)에 target="_blank" 추가
+    const allLinks = contentRef.current.querySelectorAll('a[href]');
+    allLinks.forEach((link) => {
+      const href = link.getAttribute('href');
+      // 섹션 링크(#로 시작)가 아닌 외부 링크에만 target="_blank" 추가
+      if (href && !href.startsWith('#') && !href.startsWith('/')) {
+        // new_window를 _blank로 변환 (표준)
+        if (link.getAttribute('target') === 'new_window') {
+          link.setAttribute('target', '_blank');
+        } else if (!link.hasAttribute('target')) {
+          link.setAttribute('target', '_blank');
+        }
+        if (!link.hasAttribute('rel')) {
+          link.setAttribute('rel', 'noopener noreferrer'); // 보안을 위한 rel 속성 추가
+        }
+      }
+    });
   }, [highlightedAnnotation, html, manualId, onSectionLinkClick]);
 
   // 섹션 링크 클릭 처리를 위한 별도 useEffect

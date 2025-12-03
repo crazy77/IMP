@@ -6,6 +6,7 @@ import Link from "next/link";
 import dayjs from "dayjs";
 import { Manual } from "@prisma/client";
 import ThemeToggle from "@/components/ThemeToggle";
+import { signOutAction } from "@/app/actions";
 
 interface ManualWithSections extends Manual {
   sections: Array<{ imageUrl: string | null }>;
@@ -53,6 +54,10 @@ export default function DashboardClient({ manuals }: DashboardClientProps) {
     alert("링크가 복사되었습니다!");
   };
 
+  const handleSignOut = async () => {
+    await signOutAction();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
       <div className="max-w-7xl mx-auto">
@@ -62,6 +67,12 @@ export default function DashboardClient({ manuals }: DashboardClientProps) {
           </h1>
           <div className="flex items-center gap-4">
             <ThemeToggle />
+            <button
+              onClick={handleSignOut}
+              className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              로그아웃
+            </button>
             <Link
               href="/editor/new"
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

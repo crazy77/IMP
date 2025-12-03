@@ -5,6 +5,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "@tiptap/markdown";
+import Link from "@tiptap/extension-link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -34,6 +35,24 @@ function HighlightedContent({
         el.classList.add('highlighted');
       } else {
         el.classList.remove('highlighted');
+      }
+    });
+
+    // 외부 링크(섹션 링크가 아닌)에 target="_blank" 추가
+    const allLinks = contentRef.current.querySelectorAll('a[href]');
+    allLinks.forEach((link) => {
+      const href = link.getAttribute('href');
+      // 섹션 링크(#로 시작)가 아닌 외부 링크에만 target="_blank" 추가
+      if (href && !href.startsWith('#') && !href.startsWith('/')) {
+        // new_window를 _blank로 변환 (표준)
+        if (link.getAttribute('target') === 'new_window') {
+          link.setAttribute('target', '_blank');
+        } else if (!link.hasAttribute('target')) {
+          link.setAttribute('target', '_blank');
+        }
+        if (!link.hasAttribute('rel')) {
+          link.setAttribute('rel', 'noopener noreferrer'); // 보안을 위한 rel 속성 추가
+        }
       }
     });
   }, [highlightedAnnotation, html]);
@@ -92,6 +111,7 @@ export default function MarkdownEditor({
   const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const selectedItemRef = useRef<HTMLDivElement>(null);
+  const isUpdatingContentRef = useRef(false); // 무한 루프 방지 플래그
   
   // 상태를 ref로 관리하여 handleKeyDown에서 최신 값 참조
   const showSectionMenuRef = useRef(showSectionMenu);
@@ -138,7 +158,32 @@ export default function MarkdownEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        link: false, // StarterKit의 기본 Link를 비활성화하고 확장된 Link 사용
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'cursor-pointer',
+        },
+      }).extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            target: {
+              default: null,
+            },
+          };
+        },
+        renderHTML({ HTMLAttributes }) {
+          const href = HTMLAttributes.href;
+          // 섹션 링크가 아닌 외부 링크에만 target="_blank" 추가
+          if (href && !href.startsWith('#') && !href.startsWith('/')) {
+            return ['a', { ...HTMLAttributes, target: '_blank', rel: 'noopener noreferrer' }, 0];
+          }
+          return ['a', HTMLAttributes, 0];
+        },
+      }),
       Annotation.configure({
         onAnnotationClick,
         highlightedAnnotation,
@@ -190,6 +235,91 @@ export default function MarkdownEditor({
       },
     },
     onUpdate: ({ editor }) => {
+      // 무한 루프 방지
+      if (isUpdatingContentRef.current) {
+        const html = editor.getHTML();
+        onChange(html);
+        return;
+      }
+
+      const { state } = editor;
+      const { doc, schema } = state;
+      const linkMarkType = schema.marks.link;
+      let hasChanges = false;
+      const tr = state.tr;
+
+      // 모든 텍스트 노드를 순회하며 마크다운 링크 패턴 찾기
+      doc.descendants((node, pos) => {
+        // 텍스트 노드이고 이미 링크 마크가 없는 경우만 처리
+        if (node.isText && !node.marks.some(mark => mark.type === linkMarkType)) {
+          const text = node.text || '';
+          // 마크다운 링크 패턴: [텍스트](URL)
+          // 더 견고한 정규식: 대괄호와 괄호 내부에 특수 문자 허용
+          const markdownLinkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+          const matches: Array<{ start: number; end: number; text: string; url: string }> = [];
+          let match;
+
+          while ((match = markdownLinkRegex.exec(text)) !== null) {
+            const linkText = match[1] || '';
+            const url = match[2] || '';
+            
+            // 빈 URL은 스킵
+            if (!url.trim()) {
+              continue;
+            }
+
+            matches.push({
+              start: pos + match.index,
+              end: pos + match.index + match[0].length,
+              text: linkText,
+              url: url.trim(),
+            });
+          }
+
+          // 뒤에서부터 처리하여 위치가 변경되지 않도록 함
+          for (let i = matches.length - 1; i >= 0; i--) {
+            const { start, end, text: linkText, url } = matches[i];
+            
+            // 외부 링크인지 확인
+            const isExternalLink = !url.startsWith('#') && !url.startsWith('/');
+            
+            // 링크 마크 생성
+            const linkAttrs: { href: string; target?: string; rel?: string } = { href: url };
+            if (isExternalLink) {
+              linkAttrs.target = '_blank';
+              linkAttrs.rel = 'noopener noreferrer';
+            }
+            
+            const linkMark = linkMarkType.create(linkAttrs);
+            
+            // 텍스트를 링크로 변환
+            // 먼저 마크다운 링크 텍스트 부분만 남기고 나머지 삭제
+            const linkStart = start;
+            const linkEnd = end;
+            const linkTextStart = linkStart + 1; // '[' 다음
+            const linkTextEnd = linkTextStart + linkText.length;
+            
+            // 마크다운 링크 전체를 삭제하고 링크 텍스트만 삽입
+            tr.delete(linkStart, linkEnd);
+            tr.insert(linkStart, schema.text(linkText));
+            // 링크 마크 추가
+            tr.addMark(linkStart, linkStart + linkText.length, linkMark);
+            
+            hasChanges = true;
+          }
+        }
+      });
+
+      // 변경사항이 있으면 적용
+      if (hasChanges) {
+        isUpdatingContentRef.current = true;
+        editor.view.dispatch(tr);
+        // 다음 틱에서 플래그 리셋
+        setTimeout(() => {
+          isUpdatingContentRef.current = false;
+        }, 0);
+      }
+
       // HTML로 저장 (어노테이션 번호가 HTML 태그로 포함되어 있으므로)
       const html = editor.getHTML();
       onChange(html);
