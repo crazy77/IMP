@@ -11,6 +11,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 // localStorage 키
 const STORAGE_KEY_SPLIT_RATIO = "imm-viewer-split-ratio";
 const STORAGE_KEY_SIDEBAR_COLLAPSED = "imm-viewer-sidebar-collapsed";
+const STORAGE_KEY_SIDEBAR_WIDTH = "imm-viewer-sidebar-width";
 
 // 하이라이트를 동적으로 적용하는 컴포넌트
 function HighlightedContent({ 
@@ -175,6 +176,7 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
   const [activeSectionIndex, setActiveSectionIndex] = useState(0);
   const [splitRatio, setSplitRatio] = useState(70);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(256); // 기본값 256px (w-64)
   const [highlightedAnnotation, setHighlightedAnnotation] = useState<number | null>(null);
   const [copiedSectionId, setCopiedSectionId] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
@@ -235,6 +237,10 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
     if (savedSidebarCollapsed === "true") {
       setIsSidebarCollapsed(true);
     }
+    const savedSidebarWidth = localStorage.getItem(STORAGE_KEY_SIDEBAR_WIDTH);
+    if (savedSidebarWidth) {
+      setSidebarWidth(parseInt(savedSidebarWidth, 10));
+    }
   }, []);
 
   // splitRatio 변경 시 localStorage에 저장
@@ -246,6 +252,11 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SIDEBAR_COLLAPSED, isSidebarCollapsed.toString());
   }, [isSidebarCollapsed]);
+
+  // sidebarWidth 변경 시 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_SIDEBAR_WIDTH, sidebarWidth.toString());
+  }, [sidebarWidth]);
 
   // URL 해시에서 섹션 ID 읽기 및 해당 섹션으로 이동
   useEffect(() => {
@@ -351,105 +362,128 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900">
-      <div className="flex flex-1 overflow-hidden">
-        {!isSidebarCollapsed && (
-          <aside className="w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-y-auto">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-900 dark:text-white">목차</h2>
-                <button
-                  onClick={() => setIsSidebarCollapsed(true)}
-                  className="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                  aria-label="목차 접기"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                  </svg>
-                </button>
-              </div>
-              <ul className="space-y-1">
-                {sortedSections.map((section) => {
-                  if (!shouldShowSection(section)) return null;
-                  
-                  const originalIndex = sections.findIndex(s => s.id === section.id);
-                  const depth = getSectionDepth(section);
-                  const children = getChildren(section.id);
-                  const hasChildren = children.length > 0;
-                  const isExpanded = expandedSections.has(section.id);
+      <div className="flex flex-1 overflow-hidden h-full">
+        {!isSidebarCollapsed ? (
+          <div className="flex border-r border-gray-200 dark:border-gray-700 flex-shrink-0" style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: '50%' }}>
+            <aside className="flex-1 bg-gray-50 dark:bg-gray-800 overflow-y-auto">
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-semibold text-gray-900 dark:text-white">목차</h2>
+                  <button
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    className="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                    aria-label="목차 접기"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    </svg>
+                  </button>
+                </div>
+                <ul className="space-y-1">
+                  {sortedSections.map((section) => {
+                    if (!shouldShowSection(section)) return null;
+                    
+                    const originalIndex = sections.findIndex(s => s.id === section.id);
+                    const depth = getSectionDepth(section);
+                    const children = getChildren(section.id);
+                    const hasChildren = children.length > 0;
+                    const isExpanded = expandedSections.has(section.id);
 
-                  return (
-                    <li key={section.id}>
-                      <div className="flex items-center gap-1 group">
-                        {/* 들여쓰기 */}
-                        <div style={{ width: `${depth * 20}px` }} className="flex-shrink-0">
-                          {depth > 0 && (
-                            <div className="w-full h-full border-l-2 border-gray-300 dark:border-gray-600 ml-2" />
+                    return (
+                      <li key={section.id}>
+                        <div className="flex items-center gap-1 group">
+                          {/* 들여쓰기 */}
+                          <div style={{ width: `${depth * 20}px` }} className="flex-shrink-0">
+                            {depth > 0 && (
+                              <div className="w-full h-full border-l-2 border-gray-300 dark:border-gray-600 ml-2" />
+                            )}
+                          </div>
+                          {/* 확장/축소 버튼 */}
+                          {hasChildren && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleExpand(section.id);
+                              }}
+                              className="p-0.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+                            >
+                              <svg 
+                                className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                fill="none" 
+                                stroke="currentColor" 
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
                           )}
-                        </div>
-                        {/* 확장/축소 버튼 */}
-                        {hasChildren && (
+                          {!hasChildren && <div className="w-4" />}
+                          <button
+                            onClick={() => setActiveSectionIndex(originalIndex)}
+                            className={`flex-1 text-left p-2 rounded ${
+                              activeSectionIndex === originalIndex
+                                ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                                : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                            }`}
+                          >
+                            {section.title || `섹션 ${originalIndex + 1}`}
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleExpand(section.id);
+                              handleCopySectionLink(section.id);
                             }}
-                            className="p-0.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+                            className={`p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                              copiedSectionId === section.id
+                                ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 opacity-100"
+                                : "hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+                            }`}
+                            title="섹션 링크 복사"
                           >
-                            <svg 
-                              className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                              fill="none" 
-                              stroke="currentColor" 
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
+                            {copiedSectionId === section.id ? (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            )}
                           </button>
-                        )}
-                        {!hasChildren && <div className="w-4" />}
-                        <button
-                          onClick={() => setActiveSectionIndex(originalIndex)}
-                          className={`flex-1 text-left p-2 rounded ${
-                            activeSectionIndex === originalIndex
-                              ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-                              : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-                          }`}
-                        >
-                          {section.title || `섹션 ${originalIndex + 1}`}
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCopySectionLink(section.id);
-                          }}
-                          className={`p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
-                            copiedSectionId === section.id
-                              ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 opacity-100"
-                              : "hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
-                          }`}
-                          title="섹션 링크 복사"
-                        >
-                          {copiedSectionId === section.id ? (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </aside>
-        )}
-        {isSidebarCollapsed && (
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </aside>
+            <div
+              className="w-1 bg-gray-300 dark:bg-gray-600 cursor-col-resize hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors flex-shrink-0"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const startX = e.clientX;
+                const startWidth = sidebarWidth;
+                
+                const handleMouseMove = (moveEvent: MouseEvent) => {
+                  const diff = moveEvent.clientX - startX;
+                  const newWidth = Math.max(200, Math.min(window.innerWidth * 0.5, startWidth + diff));
+                  setSidebarWidth(newWidth);
+                };
+                
+                const handleMouseUp = () => {
+                  document.removeEventListener("mousemove", handleMouseMove);
+                  document.removeEventListener("mouseup", handleMouseUp);
+                };
+                
+                document.addEventListener("mousemove", handleMouseMove);
+                document.addEventListener("mouseup", handleMouseUp);
+              }}
+            />
+          </div>
+        ) : (
           <button
             onClick={() => setIsSidebarCollapsed(false)}
-            className="fixed left-0 top-1/2 -translate-y-1/2 z-40 p-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-r-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            className="fixed left-0 top-[88px] z-40 p-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-r-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
             aria-label="목차 펼치기"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -458,57 +492,74 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
           </button>
         )}
 
-        {activeSection?.imageUrl ? (
-          <SplitPane
-            defaultRatio={splitRatio}
-            onRatioChange={setSplitRatio}
-            left={
-              <div className="h-full overflow-auto bg-gray-200 dark:bg-gray-800 flex items-center justify-center p-8">
-                <div className="relative flex items-center justify-center">
-                  <img
-                    src={activeSection.imageUrl}
-                    alt={activeSection.title}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                  {activeSection.annotations?.map((ann, index) => {
-                    const displayNumber = ann.number || index + 1;
-                    const isHighlighted = highlightedAnnotation === displayNumber;
-                    return (
-                      <div key={ann.id}>
-                        <div
-                          className={`absolute border-2 ${
-                            isHighlighted
-                              ? "border-yellow-500 bg-yellow-200 bg-opacity-30 ring-2 ring-yellow-400"
-                              : "border-blue-500 bg-blue-200 bg-opacity-20"
-                          } transition-all cursor-pointer`}
-                          style={{
-                            left: `${ann.x}%`,
-                            top: `${ann.y}%`,
-                            width: `${ann.w}%`,
-                            height: `${ann.h}%`,
-                          }}
-                          onClick={() => handleAnnotationClick(displayNumber)}
-                        />
-                        <div
-                          className={`absolute bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg w-8 h-8 cursor-pointer hover:bg-blue-700 transition-colors ${
-                            isHighlighted ? "ring-2 ring-yellow-400 ring-offset-2" : ""
-                          }`}
-                          style={{
-                            left: `calc(${ann.x}% - 8px)`,
-                            top: `calc(${ann.y}% - 8px)`,
-                          }}
-                          onClick={() => handleAnnotationClick(displayNumber)}
-                        >
-                          {displayNumber}
+        <div className="flex-1 overflow-hidden min-w-0">
+          {activeSection?.imageUrl ? (
+            <SplitPane
+              defaultRatio={splitRatio}
+              onRatioChange={setSplitRatio}
+              left={
+                <div className="h-full overflow-auto bg-gray-200 dark:bg-gray-800 flex items-center justify-center p-8">
+                  <div className="relative flex items-center justify-center">
+                    <img
+                      src={activeSection.imageUrl}
+                      alt={activeSection.title}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                    {activeSection.annotations?.map((ann, index) => {
+                      const displayNumber = ann.number || index + 1;
+                      const isHighlighted = highlightedAnnotation === displayNumber;
+                      return (
+                        <div key={ann.id}>
+                          <div
+                            className={`absolute border-2 ${
+                              isHighlighted
+                                ? "border-yellow-500 bg-yellow-200 bg-opacity-30 ring-2 ring-yellow-400"
+                                : "border-blue-500 bg-blue-200 bg-opacity-20"
+                            } transition-all cursor-pointer`}
+                            style={{
+                              left: `${ann.x}%`,
+                              top: `${ann.y}%`,
+                              width: `${ann.w}%`,
+                              height: `${ann.h}%`,
+                            }}
+                            onClick={() => handleAnnotationClick(displayNumber)}
+                          />
+                          <div
+                            className={`absolute bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg w-8 h-8 cursor-pointer hover:bg-blue-700 transition-colors ${
+                              isHighlighted ? "ring-2 ring-yellow-400 ring-offset-2" : ""
+                            }`}
+                            style={{
+                              left: `calc(${ann.x}% - 8px)`,
+                              top: `calc(${ann.y}% - 8px)`,
+                            }}
+                            onClick={() => handleAnnotationClick(displayNumber)}
+                          >
+                            {displayNumber}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            }
-            right={
-              <div className="h-full overflow-auto bg-white dark:bg-gray-900">
+              }
+              right={
+                <div className="h-full overflow-auto bg-white dark:bg-gray-900">
+                  <div className="p-6 ProseMirror prose max-w-none prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-code:text-gray-900 dark:prose-code:text-gray-100 prose-pre:bg-gray-100 dark:prose-pre:bg-gray-800 prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300">
+                    <h2>{activeSection.title}</h2>
+                    <HighlightedContent 
+                      html={activeSection.contentMd}
+                      highlightedAnnotation={highlightedAnnotation}
+                      onAnnotationClick={handleTextAnnotationClick}
+                      onSectionLinkClick={handleSectionLinkClick}
+                      manualId={manual.id}
+                    />
+                  </div>
+                </div>
+              }
+            />
+          ) : (
+            <div className="flex-1 overflow-auto bg-white dark:bg-gray-900">
+              {activeSection ? (
                 <div className="p-6 ProseMirror prose max-w-none prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-code:text-gray-900 dark:prose-code:text-gray-100 prose-pre:bg-gray-100 dark:prose-pre:bg-gray-800 prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300">
                   <h2>{activeSection.title}</h2>
                   <HighlightedContent 
@@ -519,29 +570,14 @@ export default function ViewerClient({ manual, sections }: ViewerClientProps) {
                     manualId={manual.id}
                   />
                 </div>
-              </div>
-            }
-          />
-        ) : (
-          <div className="flex-1 overflow-auto bg-white dark:bg-gray-900">
-            {activeSection ? (
-              <div className="p-6 ProseMirror prose max-w-none prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-code:text-gray-900 dark:prose-code:text-gray-100 prose-pre:bg-gray-100 dark:prose-pre:bg-gray-800 prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300">
-                <h2>{activeSection.title}</h2>
-                <HighlightedContent 
-                  html={activeSection.contentMd}
-                  highlightedAnnotation={highlightedAnnotation}
-                  onAnnotationClick={handleTextAnnotationClick}
-                  onSectionLinkClick={handleSectionLinkClick}
-                  manualId={manual.id}
-                />
-              </div>
-            ) : (
-              <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
-                내용 없음
-              </div>
-            )}
-          </div>
-        )}
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
+                  내용 없음
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-6 py-4 flex items-center justify-between">
         {activeSectionIndex > 0 ? (

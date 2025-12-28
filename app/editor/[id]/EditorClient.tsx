@@ -21,6 +21,7 @@ import {
 // localStorage 키
 const STORAGE_KEY_SPLIT_RATIO = "imm-editor-split-ratio";
 const STORAGE_KEY_SIDEBAR_COLLAPSED = "imm-editor-sidebar-collapsed";
+const STORAGE_KEY_SIDEBAR_WIDTH = "imm-editor-sidebar-width";
 
 interface Annotation {
   id: string;
@@ -51,6 +52,7 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [splitRatio, setSplitRatio] = useState(70);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(256); // 기본값 256px (w-64)
   const [copiedSectionId, setCopiedSectionId] = useState<string | null>(null);
   const markdownEditorRef = useRef<any>(null);
   const isUpdatingFromHashRef = useRef(false);
@@ -65,6 +67,10 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
     if (savedSidebarCollapsed === "true") {
       setIsSidebarCollapsed(true);
     }
+    const savedSidebarWidth = localStorage.getItem(STORAGE_KEY_SIDEBAR_WIDTH);
+    if (savedSidebarWidth) {
+      setSidebarWidth(parseInt(savedSidebarWidth, 10));
+    }
   }, []);
 
   // splitRatio 변경 시 localStorage에 저장
@@ -76,6 +82,11 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SIDEBAR_COLLAPSED, isSidebarCollapsed.toString());
   }, [isSidebarCollapsed]);
+
+  // sidebarWidth 변경 시 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_SIDEBAR_WIDTH, sidebarWidth.toString());
+  }, [sidebarWidth]);
 
   // URL 해시에서 섹션 ID 읽기 및 해당 섹션으로 이동
   useEffect(() => {
@@ -693,27 +704,50 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {!isSidebarCollapsed && (
-          <aside className="w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-y-auto">
-            <TableOfContents
-              sections={sections}
-              activeIndex={activeSectionIndex}
-              onSelect={setActiveSectionIndex}
-              onAdd={handleAddSection}
-              onDelete={handleDeleteSection}
-              onCollapse={() => setIsSidebarCollapsed(true)}
-              onCopyLink={handleCopySectionLink}
-              copiedSectionId={copiedSectionId}
-              onReorder={handleReorderSections}
-              onSetParent={handleSetParent}
+      <div className="flex flex-1 overflow-hidden h-full">
+        {!isSidebarCollapsed ? (
+          <div className="flex border-r border-gray-200 dark:border-gray-700 flex-shrink-0" style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: '50%' }}>
+            <aside className="flex-1 bg-gray-50 dark:bg-gray-800 overflow-y-auto">
+              <TableOfContents
+                sections={sections}
+                activeIndex={activeSectionIndex}
+                onSelect={setActiveSectionIndex}
+                onAdd={handleAddSection}
+                onDelete={handleDeleteSection}
+                onCollapse={() => setIsSidebarCollapsed(true)}
+                onCopyLink={handleCopySectionLink}
+                copiedSectionId={copiedSectionId}
+                onReorder={handleReorderSections}
+                onSetParent={handleSetParent}
+              />
+            </aside>
+            <div
+              className="w-1 bg-gray-300 dark:bg-gray-600 cursor-col-resize hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors flex-shrink-0"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const startX = e.clientX;
+                const startWidth = sidebarWidth;
+                
+                const handleMouseMove = (moveEvent: MouseEvent) => {
+                  const diff = moveEvent.clientX - startX;
+                  const newWidth = Math.max(200, Math.min(window.innerWidth * 0.5, startWidth + diff));
+                  setSidebarWidth(newWidth);
+                };
+                
+                const handleMouseUp = () => {
+                  document.removeEventListener("mousemove", handleMouseMove);
+                  document.removeEventListener("mouseup", handleMouseUp);
+                };
+                
+                document.addEventListener("mousemove", handleMouseMove);
+                document.addEventListener("mouseup", handleMouseUp);
+              }}
             />
-          </aside>
-        )}
-        {isSidebarCollapsed && (
+          </div>
+        ) : (
           <button
             onClick={() => setIsSidebarCollapsed(false)}
-            className="fixed left-0 top-1/2 -translate-y-1/2 z-40 p-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-r-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            className="fixed left-0 top-[88px] z-40 p-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-r-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
             aria-label="목차 펼치기"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -722,7 +756,8 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
           </button>
         )}
 
-        <SplitPane
+        <div className="flex-1 overflow-hidden min-w-0">
+          <SplitPane
           defaultRatio={splitRatio}
           onRatioChange={setSplitRatio}
           left={
@@ -765,7 +800,8 @@ export default function EditorClient({ manual, sections: initialSections }: Edit
               </div>
             )
           }
-        />
+          />
+        </div>
       </div>
       <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-6 py-4 flex items-center justify-between">
         {activeSectionIndex > 0 ? (
